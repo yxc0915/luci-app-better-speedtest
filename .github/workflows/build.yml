@@ -27,32 +27,37 @@ jobs:
       - name: Build every supported architecture
         shell: bash
         run: |
+          version=''
           if [[ "$GITHUB_REF_TYPE" == tag ]]; then
-            bash build.sh all "${GITHUB_REF_NAME#v}-1"
-          else
-            bash build.sh all
+            version="${GITHUB_REF_NAME#v}-1"
           fi
+          bash build.sh all "$version" ipk
+          sudo bash build.sh all "$version" apk
 
       - name: Verify all packages and checksums
         shell: bash
         run: |
-          expected=$(bash build.sh --list | wc -l)
-          cd dist
           shopt -s nullglob
-          packages=(*.ipk)
-          checksums=(*.ipk.sha256)
-          [[ ${#packages[@]} -eq $expected && ${#checksums[@]} -eq $expected ]]
-          for package in "${packages[@]}"; do
-            sha256sum --strict -c "$package.sha256"
+          for format in ipk apk; do
+            expected=$(bash build.sh --list "$format" | wc -l)
+            (
+              cd dist
+              packages=(*."$format")
+              checksums=(*."$format".sha256)
+              [[ ${#packages[@]} -eq $expected && ${#checksums[@]} -eq $expected ]]
+              sha256sum --strict -c "${checksums[@]}"
+            )
           done
 
       - name: Upload packages
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: openwrt-ipk
+          name: openwrt-packages
           path: |
             dist/*.ipk
             dist/*.ipk.sha256
+            dist/*.apk
+            dist/*.apk.sha256
           if-no-files-found: error
           compression-level: 0
           retention-days: 7
@@ -68,7 +73,7 @@ jobs:
       - name: Retrieve verified packages
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: openwrt-ipk
+          name: openwrt-packages
           path: dist
 
       - name: Publish GitHub release
@@ -77,7 +82,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cd dist
-          sha256sum --strict -c ./*.ipk.sha256
+          sha256sum --strict -c ./*.sha256
           tag=$GITHUB_REF_NAME
           if draft=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft); then
             if [[ $draft == false ]]; then
@@ -87,7 +92,7 @@ jobs:
           else
             gh release create "$tag" --repo "$GITHUB_REPOSITORY" --verify-tag --draft \
               --title "LuCI Better-Speedtest $tag" \
-              --notes '适用于 OpenWrt 24.10（opkg）。运行 `opkg print-architecture` 选择对应的 `.ipk`。安装后从「网络 → 网络测速」打开。各安装包附有 SHA-256 校验文件。'
+              --notes 'OpenWrt / iStoreOS 24.10（opkg）请下载 `.ipk`。OpenWrt / iStoreOS 25.12（apk）请下载 `.apk`。按文件名后缀选择设备架构。各安装包附有 SHA-256 校验文件。安装后从「网络 → 网络测速」打开。'
           fi
-          gh release upload "$tag" --repo "$GITHUB_REPOSITORY" --clobber ./*.ipk ./*.ipk.sha256
+          gh release upload "$tag" --repo "$GITHUB_REPOSITORY" --clobber ./*.ipk ./*.apk ./*.sha256
           gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --latest
