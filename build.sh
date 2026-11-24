@@ -2,11 +2,28 @@
 set -euo pipefail
 cd -- "$(dirname -- "$0")"
 
-version=1.1.0-1
-asset=better-speedtest-linux-amd64
+version=1.1.1-1
+arch=${1:-x86_64}
+case "$arch" in
+  x86_64)
+    asset=better-speedtest-linux-amd64
+    engine_sha=d035456877a545a8dc47d5bb5c9420531806a98c83c1f0c55b3fc2397529b532
+    ;;
+  mips_24kc)
+    asset=better-speedtest-linux-mips
+    engine_sha=6eb81b250207e81d2c6889e43c129bd8c220a7f722158faf013be277400e44ba
+    ;;
+  mipsel_24kc)
+    asset=better-speedtest-linux-mipsle
+    engine_sha=462ba637cf7512d6dc7f7de3627567f45d5b8312d265764e3b470def5a44f1b1
+    ;;
+  *)
+    printf 'Usage: %s [x86_64|mips_24kc|mipsel_24kc]\n' "$0" >&2
+    exit 2
+    ;;
+esac
 engine_url="https://github.com/Gaimoydev/better-speedtest/releases/download/v0.0.3/$asset"
-engine_sha=d035456877a545a8dc47d5bb5c9420531806a98c83c1f0c55b3fc2397529b532
-package="luci-app-speedtest_${version}_x86_64.ipk"
+package="luci-app-speedtest_${version}_${arch}.ipk"
 epoch=${SOURCE_DATE_EPOCH:-1783089639}
 stage=$(mktemp -d)
 trap 'rm -rf -- "$stage"' EXIT
@@ -32,7 +49,7 @@ done
 cat > "$stage/control/control" <<EOF
 Package: luci-app-speedtest
 Version: $version
-Architecture: x86_64
+Architecture: $arch
 Depends: libc, luci-lua-runtime, flock, ca-bundle
 Installed-Size: $(du -sb "$stage/data" | cut -f1)
 Section: luci
