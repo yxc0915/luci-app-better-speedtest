@@ -1,0 +1,83 @@
+#!/bin/sh
+
+state=/var/run/luci-speedtest
+binary=/usr/libexec/luci-speedtest/better-speedtest
+export BETTER_SPEEDTEST_CONFIG=/etc/luci-speedtest/config.json
+umask 077
+
+pid_file="$state/worker.pid"
+events="$state/events.ndjson"
+errors="$state/worker.log"
+
+is_worker() {
+	case "$1" in ''|*[!0-9]*|0|1) return 1 ;; esac
+	[ "$(readlink "/proc/$1/exe" 2>/dev/null)" = "$binary" ]
+}
+
+lock_state() {
+	mkdir -p "$state" && exec 9>"$state/state.lock" || return 1
+	flock -x 9
+}
+
+start() {
+	local source="$1" mode="$2" duration="$3" multi="$4" node="$5" pid
+	case "$source" in auto|cnspeed|cdn|ookla) ;; *) return 1 ;; esac
+	case "$duration" in 5|10|15|30) ;; *) return 1 ;; esac
+	case "$multi" in 1|2|4|8) ;; *) return 1 ;; esac
+	lock_state || return 1
+	if is_worker "$(cat "$pid_file" 2>/dev/null)"; then
+		printf '%s\n' '{"ok":false,"error":"已有测速在运行"}'
+		return
+	fi
+	set -- test --json --src "$source" --dur "$duration" --multi "$multi"
+	case "$mode" in
+		down) set -- "$@" --no-upload ;;
+		up) set -- "$@" --no-download ;;
+		both) ;;
+		*) return 1 ;;
+	esac
+	[ -z "$node" ] || set -- "$@" --node "$node"
+	printf '{"ok":true,"running":true,"src":"%s","dur":%s}\n' "$source" "$duration" > "$state/running.json" || return 1
+	(
+		trap '' HUP
+		ulimit -f 2048
+		exec "$binary" "$@"
+	) </dev/null >"$events" 2>"$errors" 9>&- &
+	pid=$!
+	printf '%s\n' "$pid" > "$pid_file" || return 1
+	# Confirm the executable has replaced the launcher before releasing the lock.
+	for attempt in 1 2 3 4 5 6 7 8 9 10; do
+		if is_worker "$pid" || [ -s "$events" ]; then
+			printf '%s\n' '{"ok":true}'
+			return
+		fi
+		kill -0 "$pid" 2>/dev/null || break
+		sleep 0.05 2>/dev/null || sleep 1
+	done
+	printf '%s\n' '{"ok":false,"error":"测速核心启动失败，可在日志中查看详情"}'
+}
+
+case "$1" in
+	start) shift; start "$@" ;;
+	stop)
+		lock_state || exit 1
+		pid=$(cat "$pid_file" 2>/dev/null)
+		if is_worker "$pid"; then kill "$pid" 2>/dev/null || ! is_worker "$pid" || exit 1; fi
+		printf '%s\n' '{"ok":true}'
+		;;
+	status)
+		if is_worker "$(cat "$pid_file" 2>/dev/null)"; then cat "$state/running.json"
+		else printf '%s\n' '{"ok":true,"running":false}'; fi
+		;;
+	log) cat "$events" 2>/dev/null ;;
+	errlog) tail -n 24 "$errors" "$events" 2>/dev/null ;;
+	nodes|ip|version)
+		mkdir -p "$state" || exit 1
+		if [ "$1" = nodes ]; then
+			if [ "$3" = full ]; then exec "$binary" nodes --src "$2" --full; fi
+			exec "$binary" nodes --src "$2"
+		fi
+		exec "$binary" "$1"
+		;;
+	*) exit 1 ;;
+esac

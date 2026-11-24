@@ -1,0 +1,920 @@
+<%+header%>
+<%
+local dispatcher = luci.dispatcher
+local speedtest_base = dispatcher.build_url("admin", "network", "speedtest")
+local packages_url = dispatcher.build_url("admin", "system", "package-manager")
+%>
+<!-- Better-Speedtest UI by Gaimoydev, a76af55f1c94c2670bbaa324ed349d6916d2a742.
+MIT License
+
+Copyright (c) 2026 gaimoy
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+-->
+<style>
+#BETTER_SPEEDTEST_panel{--acc:#5be9c6;--bg:#0c0d10;--txt:#f3f4f6;--muted:#9a9ea8;--muted2:#61646d;--line:rgba(255,255,255,.07);--line2:rgba(255,255,255,.035);--mono:'Torus','PFcjk','PingFang SC',system-ui,sans-serif;--code:ui-monospace,"Cascadia Mono",Menlo,Consolas,monospace;color:var(--txt);font-family:'Torus','PFcjk','PingFang SC','Microsoft YaHei',system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased;width:100%;max-width:560px;margin:auto!important;position:static!important;inset:auto!important;background:transparent!important;box-shadow:none!important;padding:0!important;border:0!important}
+#BETTER_SPEEDTEST_panel *{box-sizing:border-box}
+.st-card{background:var(--bg);border:0;border-radius:16px;overflow:hidden;position:relative;box-shadow:0 0 0 1px rgba(255,255,255,.06),0 28px 70px -16px rgba(0,0,0,.66),0 10px 26px -6px rgba(0,0,0,.46)}
+.st-head{display:flex;align-items:center;justify-content:space-between;padding:18px 22px 4px}
+#BETTER_SPEEDTEST_panel.modal .st-head{padding-right:54px}
+.st-brand{display:flex;align-items:center;gap:11px}
+.st-mark{width:27px;height:27px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.st-mark svg{width:27px;height:27px;display:block}
+.st-dev{font-size:15px;font-weight:600;letter-spacing:.2px}
+.st-sub{font-size:9.5px;color:var(--muted2);letter-spacing:3px;font-family:var(--mono);margin-top:1px}
+.st-meta{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:11px;color:var(--muted)}
+.st-gsec{padding:6px 22px 0}
+.st-gwrap{position:relative;width:100%;max-width:340px;margin:0 auto;aspect-ratio:360/280}
+.st-gwrap svg{display:block;width:100%;height:100%;overflow:visible}
+.st-track{stroke:rgba(255,255,255,.07);fill:none;stroke-linecap:round}
+.st-arc{stroke:var(--acc);fill:none;stroke-linecap:round;transition:stroke-dashoffset .32s cubic-bezier(.3,.7,.3,1)}
+.st-ticklab{font-family:var(--mono);font-size:10px;fill:var(--muted2)}
+.st-gc{position:absolute;left:50%;top:52%;transform:translate(-50%,-50%);text-align:center;width:80%;pointer-events:none}
+.st-gnum{font-family:var(--mono);font-weight:600;font-size:clamp(34px,9vw,46px);line-height:.9;letter-spacing:-2.5px;color:var(--txt);font-variant-numeric:tabular-nums;max-width:100%}
+.st-gunit{font-family:var(--mono);font-size:12px;color:var(--acc);letter-spacing:2px;margin-top:8px}
+.st-glabel{font-size:11px;color:var(--muted);margin-top:10px;letter-spacing:.5px}
+.st-gpeak{font-family:var(--mono);font-size:10.5px;color:var(--muted2);margin:4px auto 0;max-width:230px;line-height:1.35;white-space:normal;overflow:hidden}
+.st-gpeak b{color:var(--muted);font-weight:600}
+.st-gstat{display:none;text-align:center;padding:0 10px;max-width:210px;margin:0 auto}
+.st-gwrap.st-starting .st-gnum,.st-gwrap.st-starting .st-gunit,.st-gwrap.st-starting .st-glabel,.st-gwrap.st-starting .st-gpeak{display:none}
+.st-gwrap.st-starting .st-gstat{display:block}
+.st-gstat-txt{font-family:var(--mono);font-size:13px;color:var(--txt);letter-spacing:.2px;line-height:1.5;max-width:186px;margin:0 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st-gstat-dots{display:flex;gap:5px;justify-content:center;margin-top:13px}
+.st-gstat-dots i{width:6px;height:6px;border-radius:50%;background:var(--acc);animation:st-dot 1.15s ease-in-out infinite}
+.st-gstat-dots i:nth-child(2){animation-delay:.15s}
+.st-gstat-dots i:nth-child(3){animation-delay:.3s}
+@keyframes st-dot{0%,75%,100%{opacity:.25;transform:scale(.72)}38%{opacity:1;transform:scale(1)}}
+.st-gwrap.st-num{aspect-ratio:360/200;display:flex;align-items:center;justify-content:center}
+.st-gwrap.st-num .st-gc{position:static;transform:none;width:100%}
+.st-gwrap.st-num .st-gnum{font-size:clamp(48px,17vw,88px);letter-spacing:-3px;max-width:100%}
+.st-blob{position:absolute;left:50%;top:50%;width:56%;aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,var(--acc) 0%,transparent 66%);filter:blur(28px);transform:translate(-50%,-50%) scale(.7);opacity:.3;transition:transform .5s cubic-bezier(.3,.7,.3,1),opacity .5s ease;animation:st-breathe 3.6s ease-in-out infinite;pointer-events:none}
+@keyframes st-breathe{0%,100%{filter:blur(26px)}50%{filter:blur(36px)}}
+.st-num-roll{display:inline-flex;align-items:flex-start;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+/* soft-fade the roll's top/bottom so the odometer clip doesn't read as a hard container edge during scroll */
+.st-dcol{-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 6%,#000 90%,transparent 100%);mask-image:linear-gradient(to bottom,transparent 0,#000 6%,#000 90%,transparent 100%)}
+.st-dcol{display:inline-block;overflow:hidden;height:1em;line-height:1}
+.st-dstrip{display:block;transition:transform .56s cubic-bezier(.34,1.2,.5,1);will-change:transform,filter}
+.st-dstrip.st-roll{animation:st-mblur .5s ease-out}
+@keyframes st-mblur{0%{filter:blur(4px)}60%{filter:blur(2px)}100%{filter:blur(0)}}
+.st-dstrip>span{display:block;height:1em;line-height:1;text-align:center}
+.st-dfix{display:inline-block;line-height:1}
+.st-stats{display:grid;grid-template-columns:repeat(4,1fr);padding:4px 12px 2px}
+.st-stat{padding:9px 10px;text-align:left;border-left:1px solid var(--line2)}
+.st-stat:first-child{border-left:0}
+.st-sk{font-size:11px;color:var(--muted);letter-spacing:.5px}
+.st-sv{font-family:var(--mono);font-weight:600;font-size:22px;margin-top:6px;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+.st-sv em{font-style:normal;font-size:10.5px;color:var(--muted2);margin-left:3px;font-weight:400}
+.st-node{display:flex;align-items:baseline;gap:10px;padding:10px 22px 2px;font-size:12px}
+.st-nt{font-weight:600;color:var(--txt)}
+.st-ns{font-family:var(--mono);font-size:10.5px;color:var(--muted2);letter-spacing:.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.st-csec{padding:12px 18px 2px}
+.st-chead{display:flex;align-items:center;justify-content:space-between;padding:0 4px 6px}
+.st-ctitle{font-size:10px;color:var(--muted2);letter-spacing:2px;text-transform:uppercase;font-family:var(--mono)}
+.st-legend{display:flex;gap:14px;font-size:11px;color:var(--muted)}
+.st-lg b{font-family:var(--mono);color:var(--txt);font-weight:600;margin-left:3px}
+.st-lg.dl{color:var(--acc)}
+.st-cwrap svg{display:block;width:100%;height:auto;overflow:visible}
+.st-gline{stroke:var(--line2)}
+.st-glab{font-family:var(--mono);font-size:9px;fill:var(--muted2)}
+.st-trace{fill:none;stroke-linecap:round;stroke-linejoin:round;transition:d .3s cubic-bezier(.33,.85,.4,1)}
+.st-carea{transition:d .3s cubic-bezier(.33,.85,.4,1)}
+.st-ctrls{display:flex;align-items:center;gap:8px;padding:14px 20px 8px;flex-wrap:wrap}
+.st-btn{font-size:12.5px;font-weight:550;color:var(--txt);cursor:pointer;padding:8px 14px;border-radius:9px;background:transparent;border:1px solid var(--line);transition:background .15s,border-color .15s,transform .1s;user-select:none}
+.st-btn:hover{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.14)}
+.st-btn:active{transform:translateY(1px)}
+.st-btn[disabled]{opacity:.45;cursor:not-allowed}
+.st-btn.primary{color:#04140f;background:var(--acc);border-color:var(--acc);font-weight:600}
+.st-btn.primary:hover{filter:brightness(1.06);background:var(--acc)}
+.st-btn.danger{color:#fff;background:#e0564f;border-color:#e0564f;font-weight:600}
+.st-btn.danger:hover{filter:brightness(1.06);background:#e0564f}
+.st-btn.ghost{color:var(--muted);border-color:var(--line2);padding:8px 11px}
+.st-btn.ghost:hover{color:var(--txt)}
+.st-seg-toggle{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.st-seg-toggle button{font-size:11.5px;font-weight:550;color:var(--muted);cursor:pointer;padding:8px 11px;background:transparent;border:0;border-left:1px solid var(--line2);transition:color .2s ease,background .3s cubic-bezier(.32,.72,0,1)}
+.st-seg-toggle button:first-child{border-left:0}
+.st-seg-toggle button.on{color:#04140f;background:var(--acc)}
+#BETTER_SPEEDTEST_typesel{border:0;gap:5px;overflow:visible;flex-wrap:wrap}
+#BETTER_SPEEDTEST_typesel button{border:1px solid var(--line);border-radius:8px}
+#BETTER_SPEEDTEST_typesel button:first-child{border-left:1px solid var(--line)}
+.st-status{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--muted2);letter-spacing:.5px}
+.st-sel,.st-input{font-family:var(--mono);font-size:11.5px;color:var(--txt);background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:8px;padding:7px 9px}
+.st-drop{position:relative;display:inline-block;vertical-align:middle}
+.st-drop-btn{font-family:var(--mono);font-size:11.5px;color:var(--txt);background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:8px;padding:7px 24px 7px 9px;cursor:pointer;position:relative;text-align:left;min-width:64px;width:100%}
+.st-drop-caret{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:9px;color:var(--muted2);pointer-events:none;transition:color .15s}
+.st-drop.open .st-drop-btn{border-color:var(--acc)}
+.st-drop.open .st-drop-caret{color:var(--acc)}
+.st-drop-menu{display:none;position:absolute;z-index:40;top:calc(100% + 4px);left:0;min-width:100%;background:#12141b;border:1px solid var(--line);border-radius:8px;padding:4px;box-shadow:0 10px 28px rgba(0,0,0,.55)}
+.st-drop.open .st-drop-menu{display:block}
+.st-drop-opt{font-family:var(--mono);font-size:11.5px;color:var(--txt);padding:6px 10px;border-radius:6px;cursor:pointer;white-space:nowrap}
+.st-drop-opt:hover{background:rgba(255,255,255,.06)}
+.st-drop-opt.on{color:var(--acc)}
+.st-input{width:100%}
+.st-log{margin:6px 18px 16px;border-top:1px solid var(--line2)}
+.st-log summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;padding:11px 4px;font-size:11.5px;font-weight:550;color:var(--muted)}
+.st-log summary::-webkit-details-marker{display:none}
+.st-log summary .chev{margin-left:auto;transition:transform .25s;color:var(--muted2)}
+.st-log[open] summary .chev{transform:rotate(90deg)}
+.st-logbody{font-family:var(--code);font-size:11px;line-height:1.7;color:var(--muted2);padding:0 4px 12px;white-space:pre-wrap;max-height:190px;overflow:auto}
+.st-close{position:absolute;top:15px;right:16px;z-index:2;width:28px;height:28px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;font-size:14px;line-height:1}
+.st-close:hover{color:var(--txt);background:rgba(255,255,255,.04)}
+.st-mask{position:fixed;inset:0;background:rgba(6,7,9,.7);backdrop-filter:blur(4px);z-index:99998;display:flex;align-items:flex-start;justify-content:center;padding:36px 14px;overflow:auto;opacity:0;transition:opacity .3s cubic-bezier(.4,0,.2,1)}
+.st-mask.st-show{opacity:1}
+/* Apple-style modal entrance: gentle scale + rise, well-tuned spring-ish ease */
+#BETTER_SPEEDTEST_panel{transform:scale(.955) translateY(10px);opacity:0;transition:transform .44s cubic-bezier(.32,.72,0,1),opacity .3s ease}
+.st-mask.st-show #BETTER_SPEEDTEST_panel{transform:none;opacity:1}
+.st-settings{padding:0 20px 6px;display:none}
+.st-settings.on{display:block}
+.st-fs{border-top:1px solid var(--line2);padding:13px 2px 4px;margin-top:6px}
+.st-fs h4{font-size:10px;color:var(--muted2);letter-spacing:2px;text-transform:uppercase;margin:0 0 11px;font-family:var(--mono)}
+.st-row{display:flex;gap:8px;align-items:center;margin-bottom:9px;flex-wrap:wrap}
+.st-row label{font-size:11.5px;color:var(--muted);min-width:70px}
+.st-cdn-item{display:flex;gap:6px;align-items:center;margin-bottom:6px}
+.st-cdn-item .st-input{flex:1}
+.st-x{cursor:pointer;color:var(--muted);border:1px solid var(--line);border-radius:7px;padding:6px 9px;font-size:12px;background:transparent}
+.st-x:hover{color:#ff7a7a;border-color:rgba(255,120,120,.3)}
+/* ---- accent color: native browser color picker ---- */
+.st-color{width:38px;height:28px;padding:0;border:1px solid var(--line);border-radius:7px;background:transparent;cursor:pointer;vertical-align:middle}
+.st-color::-webkit-color-swatch-wrapper{padding:2px}
+.st-color::-webkit-color-swatch{border:0;border-radius:5px}
+/* ---- responsive: wide viewport (PC) => 2-column dashboard inside the modal (more info); narrow (mobile) => vertical hero ---- */
+@media(min-width:880px){
+  #BETTER_SPEEDTEST_panel{max-width:912px}
+  #BETTER_SPEEDTEST_panel .st-card{display:grid;grid-template-columns:344px 1fr;column-gap:10px;align-items:start;
+    grid-template-areas:"head head" "gauge stats" "gauge node" "gauge chart" "ctrls ctrls" "picker picker" "settings settings" "log log"}
+  #BETTER_SPEEDTEST_panel .st-head{grid-area:head}
+  #BETTER_SPEEDTEST_panel .st-gsec{grid-area:gauge;align-self:center;padding-bottom:12px}
+  #BETTER_SPEEDTEST_panel .st-stats{grid-area:stats;grid-template-columns:1fr 1fr;align-self:start;padding-top:16px}
+  #BETTER_SPEEDTEST_panel .st-node{grid-area:node}
+  #BETTER_SPEEDTEST_panel .st-csec{grid-area:chart}
+  #BETTER_SPEEDTEST_panel .st-ctrls{grid-area:ctrls}
+  #BETTER_SPEEDTEST_panel #BETTER_SPEEDTEST_picker{grid-area:picker}
+  #BETTER_SPEEDTEST_panel .st-settings{grid-area:settings}
+  #BETTER_SPEEDTEST_panel .st-log{grid-area:log}
+  #BETTER_SPEEDTEST_panel .st-gwrap{max-width:300px}
+  /* PC: settings flow in 2 columns (save vertical space); wide sections span full width */
+  #BETTER_SPEEDTEST_panel .st-settings.on{columns:2;column-gap:22px}
+  #BETTER_SPEEDTEST_panel .st-settings .st-fs{break-inside:avoid;-webkit-column-break-inside:avoid;margin-top:0;padding-top:13px}
+  #BETTER_SPEEDTEST_panel .st-settings .st-fs.wide{column-span:all}
+  /* CDN source editor: 2 symmetric columns; a lone last (odd) row spans both */
+  #BETTER_SPEEDTEST_panel #BETTER_SPEEDTEST_cdnlist{display:grid;grid-template-columns:1fr 1fr;column-gap:14px;row-gap:6px}
+  #BETTER_SPEEDTEST_panel #BETTER_SPEEDTEST_cdnlist .st-cdn-item{margin-bottom:0}
+  #BETTER_SPEEDTEST_panel #BETTER_SPEEDTEST_cdnlist .st-cdn-item:last-child:nth-child(odd){grid-column:1 / -1}
+}
+/* ---- node / CDN picker (tabbed, visible list) ---- */
+.st-picker{padding:0 20px 4px;display:none}
+.st-picker.on{display:block}
+.st-pk-tabs{display:flex;gap:4px;border-bottom:1px solid var(--line2);padding:12px 0 0}
+.st-pk-tab{font-size:12px;color:var(--muted);cursor:pointer;padding:8px 12px;border:0;background:transparent;border-bottom:2px solid transparent;margin-bottom:-1px}
+.st-pk-tab.on{color:var(--txt);border-bottom-color:var(--acc)}
+.st-pk-tools{display:flex;gap:8px;align-items:center;padding:8px 2px 2px}
+.st-pk-list{max-height:236px;overflow:auto;padding:6px 0}
+.st-pk-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:12.5px}
+.st-pk-row:hover{background:rgba(255,255,255,.045)}
+.st-pk-row.sel{background:color-mix(in srgb,var(--acc) 15%,transparent);outline:1px solid color-mix(in srgb,var(--acc) 42%,transparent)}
+.st-pk-name{font-weight:600;color:var(--txt);white-space:nowrap}
+.st-pk-meta{font-family:var(--mono);font-size:10.5px;color:var(--muted2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;text-align:right}
+.st-pk-tag{font-size:9px;font-family:var(--mono);padding:2px 6px;border-radius:5px;border:1px solid var(--line);color:var(--muted)}
+.st-pk-empty{color:var(--muted2);font-size:12px;padding:18px 10px;text-align:center}
+/* ---- first-run init / onboarding (binary not installed) ---- */
+.st-init{display:none;padding:40px 26px 36px;text-align:center}
+#BETTER_SPEEDTEST_panel.need-init .st-card{display:block!important}
+#BETTER_SPEEDTEST_panel.need-init .st-gsec,#BETTER_SPEEDTEST_panel.need-init .st-stats,#BETTER_SPEEDTEST_panel.need-init .st-node,#BETTER_SPEEDTEST_panel.need-init .st-csec,#BETTER_SPEEDTEST_panel.need-init .st-ctrls,#BETTER_SPEEDTEST_panel.need-init #BETTER_SPEEDTEST_picker,#BETTER_SPEEDTEST_panel.need-init .st-settings,#BETTER_SPEEDTEST_panel.need-init .st-log{display:none!important}
+#BETTER_SPEEDTEST_panel.need-init .st-init{display:block;animation:st-fadein .42s cubic-bezier(.32,.72,0,1)}
+@keyframes st-fadein{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.st-init-icon{width:58px;height:58px;border-radius:16px;background:color-mix(in srgb,var(--acc) 12%,transparent);display:flex;align-items:center;justify-content:center;margin:0 auto 20px}
+.st-init-icon svg{width:30px;height:30px}
+.st-init-title{font-size:19px;font-weight:600;letter-spacing:.3px}
+.st-init-desc{font-size:13px;color:var(--muted);margin:8px auto 0;line-height:1.6;max-width:330px}
+.st-init-arch{font-family:var(--mono);font-size:11.5px;color:var(--muted2);margin-top:16px}
+.st-init-bar{height:8px;border-radius:5px;background:rgba(255,255,255,.06);overflow:hidden;margin:14px auto 0;max-width:360px}
+.st-init-fill{height:100%;width:0;border-radius:5px;background:var(--acc);transition:width .45s cubic-bezier(.32,.72,0,1)}
+.st-init-pct{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:9px;min-height:16px}
+.st-init-step{font-size:11.5px;color:var(--muted2);margin-top:5px;min-height:16px;overflow-wrap:anywhere}
+.st-init-actions{display:flex;gap:10px;justify-content:center;margin-top:20px}
+.st-init-more{display:none;flex-direction:column;gap:10px;margin:16px auto 0;max-width:380px;text-align:left}
+.st-init-mrow{display:flex;gap:8px}
+.st-init-mrow .st-input{flex:1}
+.st-init-upload{display:block;text-align:center;font-size:12px;color:var(--acc);cursor:pointer;padding:9px;border:1px dashed var(--line);border-radius:9px;transition:background .15s}
+.st-init-upload:hover{background:rgba(255,255,255,.03)}
+.st-init-hint{font-size:11.5px;line-height:1.45;color:var(--muted2);text-align:center;margin-top:-2px;overflow-wrap:anywhere}
+.st-init-hint a{color:var(--acc);text-decoration:none}
+.st-init-hint b{color:var(--txt);font-weight:650}
+#BETTER_SPEEDTEST_panel.st-reveal .st-gsec,#BETTER_SPEEDTEST_panel.st-reveal .st-stats,#BETTER_SPEEDTEST_panel.st-reveal .st-node,#BETTER_SPEEDTEST_panel.st-reveal .st-csec,#BETTER_SPEEDTEST_panel.st-reveal .st-ctrls{animation:st-fadein .52s cubic-bezier(.32,.72,0,1)}
+.luci-speedtest-host { container-type:inline-size; padding:8px 0 22px; }
+#BETTER_SPEEDTEST_panel { width:100%; max-width:none; margin:0 !important; opacity:1; transform:none; color-scheme:dark; }
+#BETTER_SPEEDTEST_panel .st-card {
+	display:grid; grid-template-columns:minmax(0,1fr); gap:0;
+	grid-template-areas:"head" "ctrls" "gauge" "stats" "node" "chart" "settings" "picker" "log";
+	align-items:start; border:1px solid var(--line); border-radius:12px; box-shadow:none;
+}
+#BETTER_SPEEDTEST_panel .st-head { grid-area:head; padding:14px 16px 8px; }
+#BETTER_SPEEDTEST_panel .st-dev { font-size:18px; }
+#BETTER_SPEEDTEST_panel .st-sub { font-size:10px; letter-spacing:.06em; }
+#BETTER_SPEEDTEST_panel .st-meta { padding-left:8px; }
+#BETTER_SPEEDTEST_panel .st-ctrls { grid-area:ctrls; padding:6px 16px 12px; align-self:center; flex-wrap:wrap; }
+#BETTER_SPEEDTEST_panel .st-status { margin-left:auto; }
+#BETTER_SPEEDTEST_panel .st-gsec { grid-area:gauge; align-self:center; padding:0 12px 9px; }
+#BETTER_SPEEDTEST_panel .st-gwrap { max-width:330px; }
+#BETTER_SPEEDTEST_panel .st-gauge-action { display:flex; justify-content:center; margin:8px auto 4px; }
+#BETTER_SPEEDTEST_panel .st-gauge-action .st-btn { min-width:136px; padding-inline:20px; }
+#BETTER_SPEEDTEST_panel .st-stats { grid-area:stats; grid-template-columns:repeat(4,minmax(0,1fr)); padding:7px 16px 3px; }
+#BETTER_SPEEDTEST_panel .st-stat { min-width:0; padding:8px 10px; }
+#BETTER_SPEEDTEST_panel .st-sk { color:var(--muted); }
+#BETTER_SPEEDTEST_panel .st-node { grid-area:node; margin:0 16px; padding:8px 0 5px; }
+#BETTER_SPEEDTEST_panel .st-csec { grid-area:chart; padding:4px 16px 12px; min-width:0; }
+#BETTER_SPEEDTEST_panel .st-cwrap { height:clamp(146px,19vh,220px); }
+#BETTER_SPEEDTEST_panel .st-cwrap svg { display:block; width:100%; height:100%; }
+#BETTER_SPEEDTEST_panel .st-glab { font-size:11px; fill:var(--muted); }
+#BETTER_SPEEDTEST_panel #BETTER_SPEEDTEST_picker { grid-area:picker; display:block; padding:0 16px 5px; border-top:1px solid var(--line2); }
+#BETTER_SPEEDTEST_panel .st-settings { grid-area:settings; }
+#BETTER_SPEEDTEST_panel .st-log { grid-area:log; }
+#BETTER_SPEEDTEST_panel .st-blob { animation:none; }
+#BETTER_SPEEDTEST_panel:not(.st-measuring) .st-dstrip { transition:none; }
+#BETTER_SPEEDTEST_panel .st-pk-tabs { flex-wrap:wrap; }
+#BETTER_SPEEDTEST_panel .st-pk-list { max-height:clamp(100px,14vh,172px); overflow-x:hidden; overflow-y:auto; }
+#BETTER_SPEEDTEST_panel .st-pk-tools:empty { display:none; }
+#BETTER_SPEEDTEST_panel .st-pk-row { min-width:0; width:100%; margin:0; border:0; background:transparent; text-align:left; }
+#BETTER_SPEEDTEST_panel .st-pk-name { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+#BETTER_SPEEDTEST_panel .st-pk-meta { min-width:0; }
+#BETTER_SPEEDTEST_panel .st-pk-tag { flex:none; }
+#BETTER_SPEEDTEST_panel .st-pk-row:hover { background:rgba(255,255,255,.055); }
+#BETTER_SPEEDTEST_panel .st-pk-row.sel { background:color-mix(in srgb,var(--acc) 15%,transparent); }
+#BETTER_SPEEDTEST_panel .st-btn { text-decoration:none; }
+#BETTER_SPEEDTEST_panel .st-btn:disabled { opacity:.58; cursor:wait; }
+@container (min-width: 760px) {
+	#BETTER_SPEEDTEST_panel .st-card {
+		min-block-size:max(420px,var(--st-fit-height,calc(100vh - 158px)));
+		grid-template-columns:clamp(252px,26%,405px) minmax(0,1fr);
+		grid-template-rows:auto auto auto minmax(214px,1fr) auto auto auto;
+		grid-template-areas:"head ctrls" "gauge stats" "gauge node" "gauge chart" "settings settings" "picker picker" "log log";
+	}
+	#BETTER_SPEEDTEST_panel .st-ctrls { padding:10px 16px 8px 7px; justify-content:flex-start; }
+	#BETTER_SPEEDTEST_panel .st-status { margin-left:auto; }
+	#BETTER_SPEEDTEST_panel .st-sv { font-size:24px; }
+	#BETTER_SPEEDTEST_panel .st-gsec { padding:0 10px 16px; }
+	#BETTER_SPEEDTEST_panel .st-gwrap { max-width:380px; }
+	#BETTER_SPEEDTEST_panel .st-stats { padding:4px 16px 3px 7px; }
+	#BETTER_SPEEDTEST_panel .st-node { margin-left:7px; }
+	#BETTER_SPEEDTEST_panel .st-csec { padding-left:7px; display:flex; flex-direction:column; align-self:stretch; min-height:0; }
+	#BETTER_SPEEDTEST_panel .st-cwrap { flex:1 1 0; height:auto; min-height:185px; }
+}
+@container (max-width: 759px) {
+	#BETTER_SPEEDTEST_panel { --mono:system-ui,"PingFang SC","Microsoft YaHei",sans-serif; --muted2:#9297a2; font-family:var(--mono); }
+	#BETTER_SPEEDTEST_panel .st-head { flex-wrap:wrap; gap:4px 12px; }
+	#BETTER_SPEEDTEST_panel .st-brand { gap:8px; }
+	#BETTER_SPEEDTEST_panel :is(.st-dev,.st-sub,.st-nt,.st-ctitle,.st-lg,.st-pk-tab) { white-space:nowrap; }
+	#BETTER_SPEEDTEST_panel .st-meta { min-width:0; padding-left:0; }
+	#BETTER_SPEEDTEST_panel .st-meta span { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+	#BETTER_SPEEDTEST_panel .st-gwrap { container-type:inline-size; max-width:300px; }
+	#BETTER_SPEEDTEST_panel .st-gnum { font-size:clamp(22px,14cqi,44px); letter-spacing:-.04em; line-height:1; white-space:nowrap; }
+	#BETTER_SPEEDTEST_panel .st-gwrap.st-num .st-gnum { font-size:clamp(28px,19cqi,58px); }
+	#BETTER_SPEEDTEST_panel .st-gunit { margin-top:4px; letter-spacing:.08em; }
+	#BETTER_SPEEDTEST_panel .st-glabel { margin-top:6px; }
+	#BETTER_SPEEDTEST_panel .st-ticklab { font-size:14px; }
+	#BETTER_SPEEDTEST_panel .st-sk { font-size:12px; }
+	#BETTER_SPEEDTEST_panel .st-sv { display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 5px; font-size:clamp(18px,5.4cqi,23px); line-height:1.2; }
+	#BETTER_SPEEDTEST_panel .st-sv em { margin-left:0; font-size:11px; }
+	#BETTER_SPEEDTEST_panel .st-node { flex-wrap:wrap; gap:4px 8px; }
+	#BETTER_SPEEDTEST_panel .st-ns { min-width:0; font-size:11px; }
+	#BETTER_SPEEDTEST_panel .st-chead { flex-wrap:wrap; gap:5px 8px; }
+	#BETTER_SPEEDTEST_panel :is(.st-ctitle,.st-legend,.st-glab,.st-status) { font-size:12px; letter-spacing:normal; }
+	#BETTER_SPEEDTEST_panel .st-legend { flex-wrap:wrap; gap:4px 10px; }
+	#BETTER_SPEEDTEST_panel .st-pk-tab { font-size:13px; padding-inline:9px; }
+}
+@container (max-width: 520px) {
+	#BETTER_SPEEDTEST_panel .st-stats { grid-template-columns:repeat(2,minmax(0,1fr)); }
+	#BETTER_SPEEDTEST_panel .st-pk-meta { display:none; }
+}
+@container (max-width: 240px) {
+	#BETTER_SPEEDTEST_panel .st-status { flex-basis:100%; margin-left:0; }
+}
+@media (prefers-reduced-motion: reduce) {
+	#BETTER_SPEEDTEST_panel .st-dstrip, #BETTER_SPEEDTEST_panel .st-arc, #BETTER_SPEEDTEST_panel .st-trace, #BETTER_SPEEDTEST_panel .st-carea { transition:none; }
+}
+</style>
+<main class="luci-speedtest-host">
+<div id="BETTER_SPEEDTEST_panel" data-api="<%=speedtest_base%>" data-packages="<%=packages_url%>" data-token="<%=token%>"><div class="st-card">
+
+  <div class="st-head"><div class="st-brand"><span class="st-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M4.6 16.8a7.5 7.5 0 1 1 14.8 0" stroke="var(--acc)" stroke-width="2" stroke-linecap="round"/><path d="M12 12.6l3.6-2.7" stroke="var(--acc)" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12.6" r="1.5" fill="var(--acc)"/></svg></span><div><div class="st-dev" id="BETTER_SPEEDTEST_dev">网络测速</div><div class="st-sub">better-speedtest</div></div></div>
+    <div class="st-meta"><span id="BETTER_SPEEDTEST_iface"></span></div></div>
+  <div class="st-gsec"><div class="st-gwrap" id="BETTER_SPEEDTEST_gwrap"><div class="st-gc"><div class="st-gnum"><span id="BETTER_SPEEDTEST_big" role="img" aria-label="0.0 Mbps">0.0</span></div><div class="st-gunit" id="BETTER_SPEEDTEST_unit">Mbps ↓</div><div class="st-glabel" id="BETTER_SPEEDTEST_glab">下载</div><div class="st-gpeak">峰值 <b id="BETTER_SPEEDTEST_peak">0.0</b></div><div class="st-gstat"><div class="st-gstat-txt" id="BETTER_SPEEDTEST_gstat">准备中…</div><div class="st-gstat-dots"><i></i><i></i><i></i></div></div></div></div><div class="st-gauge-action"><button class="st-btn primary" data-act="start">开始测速</button></div></div>
+  <div class="st-stats">
+    <div class="st-stat"><div class="st-sk">下载</div><div class="st-sv"><span id="BETTER_SPEEDTEST_dl">0.0</span><em>Mbps</em></div></div>
+    <div class="st-stat"><div class="st-sk">上传</div><div class="st-sv"><span id="BETTER_SPEEDTEST_ul">0.0</span><em>Mbps</em></div></div>
+    <div class="st-stat"><div class="st-sk">延迟</div><div class="st-sv"><span id="BETTER_SPEEDTEST_lat">—</span><em>ms</em></div></div>
+    <div class="st-stat"><div class="st-sk">抖动</div><div class="st-sv"><span id="BETTER_SPEEDTEST_jit">—</span><em>ms</em></div></div>
+  </div>
+  <div class="st-node"><span class="st-nt" id="BETTER_SPEEDTEST_nt">尚未测速</span><span class="st-ns" id="BETTER_SPEEDTEST_ns">—</span></div>
+  <div class="st-csec"><div class="st-chead"><span class="st-ctitle">吞吐曲线</span><span class="st-legend"><span class="st-lg dl">下载<b id="BETTER_SPEEDTEST_lgd">0</b></span><span class="st-lg ul">上传<b id="BETTER_SPEEDTEST_lgu">0</b></span></span></div><div class="st-cwrap" id="BETTER_SPEEDTEST_cwrap"></div></div>
+  <div class="st-ctrls">
+
+    <button class="st-btn" data-act="ip">定位</button>
+
+    <button class="st-btn ghost" data-act="settings">设置</button>
+    <span class="st-status" id="BETTER_SPEEDTEST_st" role="status">就绪</span>
+  </div>
+  <div class="st-settings" id="BETTER_SPEEDTEST_setwrap"></div>
+  <section class="st-picker" id="BETTER_SPEEDTEST_picker" aria-label="测速源和节点选择"></section>
+  <details class="st-log"><summary>日志<svg class="chev" width="12" height="12" viewBox="0 0 14 14"><path d="M5 3l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></summary><div class="st-logbody" id="BETTER_SPEEDTEST_logbody">—</div></details>
+  </div></div>
+</main>
+<script>
+(() => {
+  'use strict';
+  const NAME = 'BETTER_SPEEDTEST';
+  const SCALE = 1000;
+  const NS = 'http://www.w3.org/2000/svg'
+  const svel = (t, a) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); return e }
+  const GA = { cx: 180, cy: 168, r: 122, start: 135, sweep: 270, max: SCALE }
+  const pol = (r, deg) => { const a = deg * Math.PI / 180; return [GA.cx + r * Math.cos(a), GA.cy + r * Math.sin(a)] }
+  const arcPath = (r, a0, a1) => { const p0 = pol(r, a0), p1 = pol(r, a1); return `M${p0[0].toFixed(2)} ${p0[1].toFixed(2)} A${r} ${r} 0 ${(a1 - a0) > 180 ? 1 : 0} 1 ${p1[0].toFixed(2)} ${p1[1].toFixed(2)}` }
+
+  function buildGauge(host) {
+    const svg = svel('svg', { viewBox: '0 0 360 280' })
+    const d = arcPath(GA.r, GA.start, GA.start + GA.sweep)
+    const track = svel('path', { d, class: 'st-track', 'stroke-width': '9' })
+    const prog = svel('path', { d, class: 'st-arc', 'stroke-width': '9' })
+    svg.appendChild(track); svg.appendChild(prog)
+    for (const mk of [0, GA.max]) { const dg = GA.start + (mk / GA.max) * GA.sweep, lp = pol(GA.r - 20, dg), tx = svel('text', { x: lp[0].toFixed(1), y: (lp[1] + 3).toFixed(1), class: 'st-ticklab', 'text-anchor': 'middle' }); tx.textContent = mk; svg.appendChild(tx) }
+    host.appendChild(svg)
+    const len = prog.getTotalLength(); prog.style.strokeDasharray = len; prog.style.strokeDashoffset = len
+    return { set(v) { prog.style.strokeDashoffset = len * (1 - Math.max(0, Math.min(1, v / GA.max))) } }
+  }
+
+  function buildChart(host, durS) {
+    const CW = Math.max(128, host.clientWidth || 640), CHV = Math.max(125, host.clientHeight || 190);
+    const cx0 = 40, cx1 = CW - 15, cy0 = 10, cy1 = CHV - 23, plotW = cx1 - cx0, plotH = cy1 - cy0;
+    const svg = svel('svg', { viewBox: `0 0 ${CW} ${CHV}` })
+    const g = svel('g', {}); svg.appendChild(g)
+    const yAt = v => cy1 - (Math.max(0, Math.min(SCALE, v)) / SCALE) * plotH
+    const xAt = t => cx0 + (Math.max(0, Math.min(durS, t)) / durS) * plotW
+    for (const yv of [0, 500, 1000]) { const yy = yAt(yv); g.appendChild(svel('line', { x1: cx0, y1: yy.toFixed(1), x2: cx1, y2: yy.toFixed(1), class: 'st-gline' })); const yl = svel('text', { x: cx0 - 7, y: (yy + 3).toFixed(1), class: 'st-glab', 'text-anchor': 'end' }); yl.textContent = yv; g.appendChild(yl) }
+    const step = durS <= 8 ? 2 : durS <= 20 ? 5 : 10
+    for (let xv = 0; xv <= durS; xv += step) { const xx = xAt(xv), xl = svel('text', { x: xx.toFixed(1), y: cy1 + 15, class: 'st-glab', 'text-anchor': 'middle' }); xl.textContent = xv + 's'; g.appendChild(xl) }
+    const area = svel('path', { d: '', class: 'st-carea', fill: 'var(--acc)', opacity: '.06' })
+    const lineUl = svel('path', { class: 'st-trace', d: '', stroke: 'var(--muted2)', 'stroke-width': '1.5', opacity: '.85' })
+    const lineDl = svel('path', { class: 'st-trace', d: '', stroke: 'var(--acc)', 'stroke-width': '2.4' })
+    svg.appendChild(area); svg.appendChild(lineUl); svg.appendChild(lineDl); host.appendChild(svg)
+    const path = pts => pts.map((p, i) => (i ? 'L' : 'M') + xAt(p[0]).toFixed(1) + ' ' + yAt(p[1]).toFixed(1)).join(' ')
+    return {
+      update(dl, ul) {
+        if (dl.length) { lineDl.setAttribute('d', path(dl)); area.setAttribute('d', path(dl) + ` L${xAt(dl[dl.length - 1][0]).toFixed(1)} ${cy1} L${cx0} ${cy1} Z`) }
+        if (ul.length) lineUl.setAttribute('d', path(ul))
+      }
+    }
+  }
+  const panel = document.getElementById(`${NAME}_panel`);
+  const $ = id => document.getElementById(`${NAME}_${id}`);
+  const base = panel.dataset.api;
+  const token = panel.dataset.token;
+  const storageKey = 'luci-better-speedtest-ui';
+  const sources = { auto: '自动', cnspeed: '全球网测', cdn: 'CDN', ookla: 'Ookla', ustc: '中科大（官网）' };
+  const defaults = { source: 'cnspeed', direction: 'both', duration: 10, multi: 1, display: 'gauge', animation: 'ios', color: '#5be9c6', nodes: {} };
+  const saved = (() => {
+    try { return JSON.parse(localStorage.getItem(storageKey) || '{}') || {}; }
+    catch { return {}; }
+  })();
+  const choice = (values, value, fallback) => values.includes(value) ? value : fallback;
+  const prefs = {
+    source: choice(Object.keys(sources), saved.source, defaults.source),
+    direction: choice(['both', 'down', 'up'], saved.direction, defaults.direction),
+    duration: choice([5, 10, 15, 30], saved.duration, defaults.duration),
+    multi: choice([1, 2, 4, 8], saved.multi, defaults.multi),
+    display: choice(['gauge', 'number'], saved.display, defaults.display),
+    animation: choice(['ios', 'normal', 'none'], saved.animation, defaults.animation),
+    color: /^#[0-9a-f]{6}$/i.test(saved.color || '') ? saved.color : defaults.color,
+    nodes: Object.fromEntries(['cnspeed', 'cdn', 'ookla'].map(kind => [kind, typeof saved.nodes?.[kind] === 'string' ? saved.nodes[kind].slice(0, 150) : ''])),
+  };
+  const savePrefs = () => { try { localStorage.setItem(storageKey, JSON.stringify(prefs)); } catch {} };
+  const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const cleanNumber = value => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
+  const speedText = value => cleanNumber(value).toFixed(1);
+  const esc = text => String(text ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  async function request(endpoint, options = {}) {
+    const { form, timeout = 10000, signal, text = false } = options;
+    const timer = signal ? null : new AbortController();
+    const timerId = timer ? setTimeout(() => timer.abort(), timeout) : null;
+    const body = form ? new URLSearchParams({ ...form, token }) : undefined;
+    try {
+      const reply = await fetch(`${base}/${endpoint}`, {
+        method: body ? 'POST' : 'GET', body, credentials: 'same-origin', cache: 'no-store', signal: signal || timer.signal,
+      });
+      if (!reply.ok) throw new Error(`HTTP ${reply.status}`);
+      return text ? await reply.text() : await reply.json();
+    } finally {
+      if (timerId !== null) clearTimeout(timerId);
+    }
+  }
+
+  const startButton = panel.querySelector('[data-act="start"]');
+  const setStatus = (text, warning = false) => { $('st').textContent = text; $('st').style.color = warning ? '#ff8a8a' : ''; };
+  const gaugeStatus = text => { $('gwrap').classList.add('st-starting'); $('gstat').textContent = text; };
+  const endGaugeStatus = () => $('gwrap').classList.remove('st-starting');
+  let activity = 'idle';
+  let chart, chartSize = '', viz, plottedSpeed = 0, digitFrame = null, digitTracks = [], digitLayout = '', digitText = '';
+  let current, pollRun = null;
+
+  function setActivity(next) {
+    activity = next;
+    panel.classList.toggle('st-measuring', next !== 'idle');
+    startButton.disabled = next === 'starting' || next === 'stopping';
+    startButton.classList.toggle('danger', next === 'running');
+    startButton.textContent = next === 'running' ? '停止测速' : next === 'starting' ? '正在启动…'
+      : next === 'stopping' ? '正在停止…' : prefs.source === 'ustc' ? '打开中科大测速' : '开始测速';
+    $('picker').querySelectorAll('button').forEach(button => { button.disabled = next !== 'idle'; });
+  }
+
+  function cancelDigits() {
+    if (digitFrame !== null) cancelAnimationFrame(digitFrame);
+    digitFrame = null;
+  }
+
+  function renderDigits(value, animate = activity === 'running') {
+    const big = $('big'), text = speedText(value), number = cleanNumber(value);
+    cancelDigits();
+    big.setAttribute('aria-label', `${text} Mbps`);
+    if (prefs.animation === 'none' || motionPreference.matches || !animate) {
+      big.textContent = text;
+      digitLayout = digitText = '';
+      plottedSpeed = number;
+      return;
+    }
+    if (prefs.animation === 'normal') {
+      const previous = plottedSpeed, started = performance.now();
+      function frame(now) {
+        const part = Math.min(1, (now - started) / 300);
+        plottedSpeed = previous + (number - previous) * (1 - Math.pow(1 - part, 3));
+        big.textContent = speedText(plottedSpeed);
+        digitFrame = (part < 1 && activity === 'running') ? requestAnimationFrame(frame) : null;
+      }
+      digitFrame = requestAnimationFrame(frame);
+      return;
+    }
+
+    const layout = text.replace(/\d/g, '#');
+    if (digitLayout !== layout || !big.querySelector('.st-num-roll')) {
+      const roll = document.createElement('span');
+      roll.className = 'st-num-roll';
+      roll.setAttribute('aria-hidden', 'true');
+      digitTracks = [];
+      Array.from(text).forEach((char, place) => {
+        const column = document.createElement('span');
+        if (char === '.') { column.className = 'st-dfix'; column.textContent = char; }
+        else {
+          column.className = 'st-dcol';
+          const strip = document.createElement('span');
+          strip.className = 'st-dstrip';
+          for (let number = 0; number < 10; number++) {
+            const tile = document.createElement('span'); tile.textContent = number; strip.append(tile);
+          }
+          digitTracks[place] = strip;
+          column.append(strip);
+        }
+        roll.append(column);
+      });
+      big.replaceChildren(roll);
+      digitLayout = layout;
+      digitText = '';
+    }
+    digitTracks.forEach((track, place) => {
+      if (digitText[place] !== text[place]) track.style.transform = `translateY(-${Number(text[place])}em)`;
+    });
+    digitText = text;
+    plottedSpeed = number;
+  }
+
+  function buildNumber(host) {
+    const blob = document.createElement('div');
+    blob.className = 'st-blob';
+    host.prepend(blob);
+    return { set(value) {
+      const fraction = Math.min(1, cleanNumber(value) / SCALE);
+      blob.style.transform = `translate(-50%,-50%) scale(${0.7 + fraction * .55})`;
+      blob.style.opacity = .22 + fraction * .5;
+    } };
+  }
+
+  function resetDisplay() {
+    const host = $('gwrap');
+    host.querySelectorAll('svg,.st-blob').forEach(node => node.remove());
+    host.classList.toggle('st-num', prefs.display === 'number');
+    viz = prefs.display === 'number' ? buildNumber(host) : buildGauge(host);
+    viz.set(plottedSpeed);
+  }
+
+  function redrawChart() {
+    const host = $('cwrap');
+    chartSize = `${host.clientWidth}:${host.clientHeight}`;
+    host.replaceChildren();
+    chart = buildChart(host, current.duration);
+    chart.update(current.download, current.upload);
+  }
+
+  function fitPanelHeight() {
+    const host = panel.closest('.luci-speedtest-host');
+    const footer = host.closest('#maincontent')?.querySelector('footer');
+    const box = host.getBoundingClientRect();
+    const style = getComputedStyle(host);
+    const padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+    const footerSpace = footer?.getClientRects().length ? Math.max(0, footer.getBoundingClientRect().bottom - box.bottom) : 0;
+    const top = Math.max(0, box.top + window.scrollY);
+    host.style.setProperty('--st-fit-height', `${Math.floor(window.innerHeight - top - padding - footerSpace - 8)}px`);
+  }
+
+  function resetRun(duration, source) {
+    current = { offset: 0, duration, source, download: [], upload: [], result: null, ping: 0, node: '', direction: '', peak: 0, lines: [] };
+    redrawChart();
+    $('glab').textContent = '下载';
+    $('unit').textContent = 'Mbps ↓';
+    $('peak').textContent = '0.0';
+    for (const id of ['dl', 'ul', 'lat', 'jit', 'lgd', 'lgu', 'logbody']) $(id).textContent = '—';
+    renderDigits(0, false);
+    viz.set(0);
+  }
+
+  function showResult(result) {
+    const dl = cleanNumber(result.dl_avg), ul = cleanNumber(result.ul_avg), ping = cleanNumber(result.ping), jitter = cleanNumber(result.jitter);
+    $('dl').textContent = dl > 0 ? speedText(dl) : '—';
+    $('ul').textContent = result.ul_msg ? '不可用' : ul > 0 ? speedText(ul) : '—';
+    $('lgd').textContent = dl > 0 ? String(Math.round(dl)) : '—';
+    $('lgu').textContent = ul > 0 ? String(Math.round(ul)) : '—';
+    $('lat').textContent = ping > 0 ? String(Math.round(ping)) : '—';
+    $('jit').textContent = jitter > 0 ? String(Math.round(jitter)) : '—';
+    $('nt').textContent = result.node || '—';
+    $('ns').textContent = [result.source, result.carrier, result.city].filter(Boolean).join(' · ') || '—';
+    const useDownload = dl > 0;
+    renderDigits(useDownload ? dl : ul, false);
+    viz.set(useDownload ? dl : ul);
+    $('unit').textContent = useDownload ? 'Mbps ↓' : 'Mbps ↑';
+    $('glab').textContent = '测速完成';
+    const peak = cleanNumber(useDownload ? result.dl_peak : result.ul_peak);
+    $('peak').textContent = peak > 0 ? speedText(peak) : '—';
+    setStatus(result.ul_msg ? '已完成 · 上传不可用' : '已完成', !!result.ul_msg);
+  }
+
+  function ingestLog(text) {
+    const newline = text.lastIndexOf('\n') + 1;
+    if (newline <= current.offset) return;
+    const updates = text.slice(current.offset, newline).split('\n').filter(Boolean);
+    current.offset = newline;
+    current.lines = current.lines.concat(updates).slice(-60);
+    $('logbody').textContent = current.lines.join('\n');
+
+    for (const line of updates) {
+      let event;
+      try { event = JSON.parse(line); } catch { continue; }
+      if (!event || typeof event !== 'object') continue;
+      if (event.phase === 'result') { current.result = event; continue; }
+      if (event.phase === 'download' || event.phase === 'upload') {
+        const value = cleanNumber(event.mbps), elapsed = cleanNumber(event.t);
+        current[event.phase].push([elapsed, value]);
+        if (current.direction !== event.phase) current.peak = 0;
+        current.direction = event.phase;
+        current.peak = Math.max(current.peak, cleanNumber(event.peak), value);
+        continue;
+      }
+      if (typeof event.msg !== 'string') continue;
+      const message = event.msg;
+      const networkMatch = message.match(/^iface=([A-Za-z0-9_.:-]+)/);
+      if (networkMatch) $('iface').textContent = networkMatch[1];
+      const pingMatch = message.match(/ping=([\d.]+)ms/);
+      if (pingMatch) { current.ping = Math.round(Number(pingMatch[1])); $('lat').textContent = current.ping; }
+      if (event.phase === 'node') {
+        const node = message.match(/^(.+?)(?:\s+[\d.]+:\d+|\s+ping=|\s+(下载中|上传中))/);
+        current.node = node ? node[1] : message.slice(0, 95);
+        $('nt').textContent = current.node;
+      }
+      setStatus(networkMatch ? '正在定位网络…' : message.slice(0, 120), event.phase === 'error');
+      if (!current.direction) gaugeStatus(networkMatch ? '正在定位网络…' : message.slice(0, 60));
+    }
+
+    chart.update(current.download, current.upload);
+    if (current.result) { endGaugeStatus(); showResult(current.result); return; }
+    if (!current.direction) return;
+    endGaugeStatus();
+    const isUpload = current.direction === 'upload';
+    const value = current[current.direction].at(-1)[1];
+    if (current.download.length) {
+      const samples = current.download.map(sample => sample[1]);
+      $('dl').textContent = speedText(isUpload ? samples.reduce((sum, sample) => sum + sample, 0) / samples.length : samples.at(-1));
+      $('lgd').textContent = String(Math.round(samples.at(-1)));
+    }
+    if (isUpload) { $('ul').textContent = speedText(value); $('lgu').textContent = String(Math.round(value)); }
+    $('unit').textContent = isUpload ? 'Mbps ↑' : 'Mbps ↓';
+    $('glab').textContent = isUpload ? '上传中' : '下载中';
+    $('peak').textContent = speedText(current.peak);
+    $('ns').textContent = sources[current.source];
+    viz.set(value);
+    renderDigits(value);
+  }
+
+  function stopPolling() {
+    const active = pollRun;
+    pollRun = null;
+    if (!active) return;
+    clearTimeout(active.timer);
+    active.request?.abort();
+  }
+
+  function beginPolling() {
+    stopPolling();
+    const run = { timer: null, request: null };
+    pollRun = run;
+    async function poll() {
+      if (pollRun !== run) return;
+      const controller = new AbortController();
+      run.request = controller;
+      const guard = setTimeout(() => controller.abort(), 9000);
+      try {
+        const status = await request('status', { signal: controller.signal });
+        if (!status || status.ok !== true) throw new Error('测速状态暂不可用');
+        if (run !== pollRun) return;
+        const text = await request('log', { text: true, signal: controller.signal });
+        if (run !== pollRun) return;
+        ingestLog(text);
+        if (!status.running) {
+          stopPolling(); endGaugeStatus(); cancelDigits(); setActivity('idle');
+          if (current.result) showResult(current.result);
+          else {
+            setStatus('测速无结果，详见日志', true);
+            request('errlog', { text: true }).then(detail => {
+              if (activity === 'idle' && !current.result && detail.trim()) $('logbody').textContent = detail.slice(-6500);
+            }).catch(() => {});
+          }
+        }
+      } catch (error) {
+        if (run === pollRun) {
+          stopPolling(); endGaugeStatus(); cancelDigits(); setActivity('idle'); setStatus(error.message || '后端连接失败', true);
+        }
+      } finally {
+        clearTimeout(guard);
+        run.request = null;
+        if (run === pollRun) run.timer = setTimeout(poll, 700);
+      }
+    }
+    run.timer = setTimeout(poll, 500);
+  }
+
+  function previewSource() {
+    if (activity !== 'idle') return;
+    $('nt').textContent = prefs.source === 'ustc' ? '中国科学技术大学测速网站'
+      : prefs.nodes[prefs.source] || (prefs.source === 'auto' ? '自动 · 由测速引擎选择' : '自动择优');
+    $('ns').textContent = prefs.source === 'ustc' ? '打开官网，在当前浏览器的网络路径上测速' : (prefs.source === 'auto' ? '全球网测 / CDN / Ookla' : sources[prefs.source]);
+    setActivity('idle');
+  }
+
+  function useSource(source, node) {
+    if (!Object.prototype.hasOwnProperty.call(sources, source) || activity !== 'idle') return;
+    prefs.source = source;
+    if (node !== undefined && source in prefs.nodes) prefs.nodes[source] = node.slice(0, 150);
+    savePrefs(); previewSource();
+    $('picker').querySelectorAll('[data-node-source]').forEach(row => {
+      const selected = row.dataset.nodeSource === source && row.dataset.node === (prefs.nodes[source] || '');
+      row.classList.toggle('sel', selected);
+      row.setAttribute('aria-pressed', String(selected));
+    });
+    const input = $('specified-node');
+    if (input) { input.disabled = !(source in prefs.nodes); input.value = prefs.nodes[source] || ''; }
+    setStatus(node ? `已选节点：${node}` : `测速源：${sources[source]}`);
+  }
+
+  async function startTest() {
+    if (activity !== 'idle') return;
+    if (prefs.source === 'ustc') { window.open('https://test.ustc.edu.cn/', '_blank', 'noopener,noreferrer'); return; }
+    const source = prefs.source;
+    const form = { src: source, node: prefs.nodes[source] || '', mode: prefs.direction, dur: String(prefs.duration), multi: String(prefs.multi) };
+    resetRun(prefs.duration, source); setActivity('starting'); setStatus('正在启动…'); gaugeStatus('正在连接测速服务…');
+    try {
+      const response = await request('start', { form, timeout: 18000 });
+      if (!response || response.ok !== true) throw new Error(response?.error || '测速启动失败');
+      setActivity('running'); beginPolling();
+    } catch (error) { endGaugeStatus(); setActivity('idle'); setStatus(error.message || '测速启动失败', true); }
+  }
+
+  async function stopTest() {
+    if (activity !== 'running') return;
+    stopPolling(); cancelDigits(); setActivity('stopping'); setStatus('正在停止…'); gaugeStatus('正在停止测速…');
+    try {
+      const response = await request('stop', { form: {}, timeout: 10000 });
+      if (!response || response.ok !== true) throw new Error(response?.error || '停止请求失败');
+      endGaugeStatus(); setActivity('idle'); setStatus('已停止'); $('glab').textContent = '已停止';
+    } catch (error) { setActivity('running'); setStatus(error.message || '停止请求失败', true); beginPolling(); }
+  }
+
+  startButton.addEventListener('click', () => activity === 'running' ? stopTest() : startTest());
+
+  let locatedProvince = '';
+  async function locate() {
+    setStatus('定位中…');
+    try {
+      const info = await request('ip', { timeout: 30000 });
+      if (!info || !info.ip) throw new Error('未取得定位结果');
+      locatedProvince = String(info.province || '').replace(/(?:省|市|壮族自治区|回族自治区|维吾尔自治区|自治区)$/g, '');
+      $('nt').textContent = [info.carrier, info.province, info.city].filter(Boolean).join(' · ') || '已定位';
+      $('ns').textContent = [info.ip, info.region].filter(Boolean).join(' · ');
+      setStatus('定位完成');
+    } catch (error) { setStatus(error.message || '定位失败', true); }
+  }
+
+  const picker = $('picker'), settings = $('setwrap');
+  const tabs = { auto: '自动', near: '全球网测 · 就近', full: '全球网测 · 全量', ookla: 'Ookla', cdn: 'CDN', ustc: '中科大' };
+  const sourceForTab = tab => tab === 'near' || tab === 'full' ? 'cnspeed' : tab;
+  const nodeCache = new Map();
+  let pickerVersion = 0;
+
+  async function getNodes(source, full = false) {
+    const key = full ? 'cnspeed-full' : source;
+    if (nodeCache.has(key)) return nodeCache.get(key);
+    const list = await request(`nodes?src=${encodeURIComponent(source)}${full ? '&full=1' : ''}`, { timeout: 45000 });
+    if (!Array.isArray(list)) throw new Error('节点列表不可用');
+    nodeCache.set(key, list);
+    return list;
+  }
+
+  function makeNodeRow(list, label, detail, tag, source, node) {
+    const row = document.createElement('button');
+    row.type = 'button'; row.className = 'st-pk-row';
+    row.dataset.nodeSource = source;
+    row.dataset.node = node;
+    row.disabled = activity !== 'idle';
+    const selected = prefs.source === source && (prefs.nodes[source] || '') === node;
+    row.classList.toggle('sel', selected);
+    row.setAttribute('aria-pressed', String(selected));
+    for (const [className, value] of [['st-pk-name', label], ['st-pk-meta', detail], ['st-pk-tag', tag]]) {
+      const span = document.createElement('span'); span.className = className; span.textContent = value; row.append(span);
+    }
+    row.addEventListener('click', () => useSource(source, node));
+    list.append(row);
+  }
+
+  async function renderNodes(tab, fetchNodes = false) {
+    const sequence = ++pickerVersion;
+    picker.querySelectorAll('[data-tab]').forEach(button => {
+      const selected = button.dataset.tab === tab;
+      button.classList.toggle('on', selected);
+      button.setAttribute('aria-pressed', String(selected));
+    });
+    const list = $('pklist'), tools = $('pktools');
+    list.replaceChildren(); tools.replaceChildren();
+    const source = sourceForTab(tab);
+    const defaultLabel = tab === 'auto' ? '由测速引擎自动选择'
+      : tab === 'ustc' ? '使用中科大官网' : `自动 · ${sources[source]}择优`;
+    makeNodeRow(list, defaultLabel, tab === 'ustc' ? '打开官方网页测速' : '', 'AUTO', source, '');
+    if (tab === 'auto') return;
+    if (tab === 'ustc') {
+      const link = document.createElement('a');
+      link.href = 'https://test.ustc.edu.cn/'; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.className = 'st-btn'; link.textContent = '打开中科大测速';
+      tools.append(link);
+      return;
+    }
+    const full = tab === 'full';
+    if (!fetchNodes && !nodeCache.has(full ? 'cnspeed-full' : source)) {
+      const load = document.createElement('button');
+      load.type = 'button'; load.className = 'st-btn ghost'; load.textContent = '加载节点';
+      load.addEventListener('click', () => renderNodes(tab, true));
+      tools.append(load);
+      return;
+    }
+    const notice = document.createElement('div'); notice.className = 'st-pk-empty'; notice.textContent = '加载中…'; list.append(notice);
+    try {
+      const nodes = await getNodes(source, full);
+      if (sequence !== pickerVersion) return;
+      notice.remove();
+      function showNodes(filtered) {
+        list.replaceChildren();
+        makeNodeRow(list, defaultLabel, '', 'AUTO', source, '');
+        const displayed = new Set();
+        for (const node of filtered) {
+          const name = String(node.name || node.host_ip || '').slice(0, 150);
+          if (!name || displayed.has(name)) continue;
+          displayed.add(name);
+          const details = source === 'cnspeed' ? [node.city, node.host_ip].filter(Boolean).join(' · ') : String(node.dl_url || node.dl || '').slice(0, 220);
+          makeNodeRow(list, name, details, node.carrier || (node.region === 'global' ? '海外' : sources[source]), source, name);
+          if (displayed.size === 500) break;
+        }
+        if (!displayed.size) { notice.textContent = '当前节点列表为空'; list.append(notice); }
+      }
+      if (!full) { showNodes(nodes); return; }
+
+      const province = document.createElement('select'); province.className = 'st-input'; province.setAttribute('aria-label', '节点省份');
+      province.add(new Option('全部省份', ''));
+      const provinces = [...new Set(nodes.map(node => node.province).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'zh-CN'));
+      for (const name of provinces) province.add(new Option(name, name));
+      const local = provinces.find(name => name.replace(/(?:省|市|壮族自治区|回族自治区|维吾尔自治区|自治区)$/g, '') === locatedProvince);
+      province.value = local || '';
+      const search = document.createElement('input'); search.className = 'st-input'; search.placeholder = '筛选城市或运营商'; search.setAttribute('aria-label', '筛选节点');
+      tools.append(province, search);
+      function filterProvince() {
+        const query = search.value.trim();
+        showNodes(nodes.filter(node => (!province.value || node.province === province.value) &&
+          [node.name, node.city, node.carrier].some(label => String(label || '').includes(query))));
+      }
+      province.addEventListener('change', filterProvince);
+      search.addEventListener('input', filterProvince);
+      filterProvince();
+    } catch (error) {
+      if (sequence === pickerVersion) notice.textContent = error.message || '节点列表加载失败';
+    }
+  }
+
+  function initializePicker() {
+    picker.innerHTML = `<div class="st-pk-tabs" role="group" aria-label="测速源">${Object.entries(tabs).map(([kind, name]) => `<button type="button" class="st-pk-tab" data-tab="${kind}" aria-pressed="false">${esc(name)}</button>`).join('')}</div><div class="st-pk-tools" id="${NAME}_pktools"></div><div class="st-pk-list" id="${NAME}_pklist"></div>`;
+    picker.querySelectorAll('[data-tab]').forEach(button => button.addEventListener('click', () => {
+      if (activity !== 'idle') return;
+      const tab = button.dataset.tab;
+      useSource(sourceForTab(tab));
+      renderNodes(tab, true);
+    }));
+    renderNodes(prefs.source === 'cnspeed' ? 'near' : prefs.source);
+  }
+
+  let settingsBuilt = false;
+  function segment(attribute, choices, active) {
+    return `<div class="st-seg-toggle">${Object.entries(choices).map(([id, label]) => `<button type="button" data-${attribute}="${esc(id)}" class="${id === active ? 'on' : ''}">${esc(label)}</button>`).join('')}</div>`;
+  }
+
+  function settingsRow(label, controls) { return `<div class="st-row"><label>${label}</label>${controls}</div>`; }
+  function numberSelect(label, id, values, value) {
+    return `<select class="st-input" id="${NAME}_${id}" aria-label="${label}">${values.map(v => `<option value="${v}"${v === value ? ' selected' : ''}>${v}</option>`).join('')}</select>`;
+  }
+
+  function openSettings() {
+    if (settings.classList.toggle('on') === false) return;
+    if (settingsBuilt) return;
+    settingsBuilt = true;
+    settings.innerHTML = `
+    <div class="st-fs"><h4>测速</h4>
+      ${settingsRow('方向', segment('direction', { both: '上下行', down: '仅下载', up: '仅上传' }, prefs.direction))}
+      ${settingsRow('指定节点', `<input class="st-input" id="${NAME}_specified-node" aria-label="指定节点" placeholder="可留空，自动择优" value="${esc(prefs.nodes[prefs.source] || '')}" ${prefs.source in prefs.nodes ? '' : 'disabled'}>`)}
+    </div>
+    <div class="st-fs"><h4>布局与显示</h4>
+      ${settingsRow('主色', `<input class="st-color" id="${NAME}_color" type="color" aria-label="主色" value="${esc(prefs.color)}">`)}
+      ${settingsRow('测速盘', segment('display', { gauge: '测速盘', number: '纯数字' }, prefs.display))}
+      ${settingsRow('数字动画', segment('animation', { ios: '滚动', normal: '平滑', none: '关闭' }, prefs.animation))}
+    </div>
+    <div class="st-fs"><h4>测速参数</h4>
+      ${settingsRow('时长（秒）', numberSelect('时长（秒）', 'duration', [5, 10, 15, 30], prefs.duration))}
+      ${settingsRow('多源并发', numberSelect('多源并发', 'multi', [1, 2, 4, 8], prefs.multi))}
+    </div>
+    <div class="st-fs"><h4>测速核心</h4>
+      <div class="st-row"><span id="${NAME}_version">读取版本中…</span><a class="st-btn ghost" href="${esc(panel.dataset.packages)}">软件包管理</a></div>
+    </div>`;
+    for (const key of ['direction', 'display', 'animation']) {
+      settings.querySelectorAll(`[data-${key}]`).forEach(button => button.addEventListener('click', () => {
+        prefs[key] = button.dataset[key]; savePrefs();
+        button.parentElement.querySelectorAll('button').forEach(peer => peer.classList.toggle('on', peer === button));
+        if (key === 'display') resetDisplay();
+        if (key === 'animation') renderDigits(plottedSpeed, false);
+      }));
+    }
+    $('specified-node').addEventListener('change', event => useSource(prefs.source, event.target.value.trim()));
+    for (const key of ['duration', 'multi']) $(key).addEventListener('change', event => { prefs[key] = Number(event.target.value); savePrefs(); });
+    $('color').addEventListener('input', event => { prefs.color = event.target.value; panel.style.setProperty('--acc', prefs.color); savePrefs(); });
+    request('version', { text: true }).then(text => { $('version').textContent = text.trim().split('\n')[0].slice(0, 105) || '未取得版本'; })
+      .catch(() => { $('version').textContent = '版本暂不可用'; });
+  }
+
+  panel.querySelector('[data-act="ip"]').addEventListener('click', locate);
+  panel.querySelector('[data-act="settings"]').addEventListener('click', openSettings);
+  window.addEventListener('pagehide', () => { stopPolling(); cancelDigits(); }, { once: true });
+
+  panel.style.setProperty('--acc', prefs.color);
+  initializePicker();
+  fitPanelHeight();
+  window.addEventListener('resize', fitPanelHeight, { passive: true });
+  window.addEventListener('pagehide', () => window.removeEventListener('resize', fitPanelHeight), { once: true });
+  resetDisplay(); resetRun(prefs.duration, prefs.source); previewSource(); setStatus('就绪');
+  if (typeof ResizeObserver === 'function') {
+    const host = $('cwrap');
+    const observer = new ResizeObserver(() => {
+      if (`${host.clientWidth}:${host.clientHeight}` !== chartSize) redrawChart();
+    });
+    observer.observe(host);
+    window.addEventListener('pagehide', () => observer.disconnect(), { once: true });
+  }
+  request('status').then(status => {
+    if (activity !== 'idle' || !status?.running) return;
+    resetRun(Number(status.dur) || prefs.duration, choice(Object.keys(sources), status.src, prefs.source));
+    setActivity('running'); beginPolling();
+  }).catch(() => setStatus('测速服务暂不可用', true));
+
+})();
+</script>
+<%+footer%>
