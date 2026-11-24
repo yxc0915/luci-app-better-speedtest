@@ -1,0 +1,93 @@
+name: Build OpenWrt packages
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: packages-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build every supported architecture
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            bash build.sh all "${GITHUB_REF_NAME#v}-1"
+          else
+            bash build.sh all
+          fi
+
+      - name: Verify all packages and checksums
+        shell: bash
+        run: |
+          expected=$(bash build.sh --list | wc -l)
+          cd dist
+          shopt -s nullglob
+          packages=(*.ipk)
+          checksums=(*.ipk.sha256)
+          [[ ${#packages[@]} -eq $expected && ${#checksums[@]} -eq $expected ]]
+          for package in "${packages[@]}"; do
+            sha256sum --strict -c "$package.sha256"
+          done
+
+      - name: Upload packages
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: openwrt-ipk
+          path: |
+            dist/*.ipk
+            dist/*.ipk.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  release:
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Retrieve verified packages
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: openwrt-ipk
+          path: dist
+
+      - name: Publish GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd dist
+          sha256sum --strict -c ./*.ipk.sha256
+          tag=$GITHUB_REF_NAME
+          if draft=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft); then
+            if [[ $draft == false ]]; then
+              printf 'Release %s has already been published.\n' "$tag"
+              exit 0
+            fi
+          else
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --verify-tag --draft \
+              --title "LuCI Better-Speedtest $tag" \
+              --notes '适用于 OpenWrt 24.10（opkg）。运行 `opkg print-architecture` 选择对应的 `.ipk`。安装后从「网络 → 网络测速」打开。各安装包附有 SHA-256 校验文件。'
+          fi
+          gh release upload "$tag" --repo "$GITHUB_REPOSITORY" --clobber ./*.ipk ./*.ipk.sha256
+          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --latest

@@ -2,26 +2,35 @@
 set -euo pipefail
 cd -- "$(dirname -- "$0")"
 
-version=1.1.1-1
+version=${2:-1.2.0-1}
 arch=${1:-x86_64}
-case "$arch" in
-  x86_64)
-    asset=better-speedtest-linux-amd64
-    engine_sha=d035456877a545a8dc47d5bb5c9420531806a98c83c1f0c55b3fc2397529b532
-    ;;
-  mips_24kc)
-    asset=better-speedtest-linux-mips
-    engine_sha=6eb81b250207e81d2c6889e43c129bd8c220a7f722158faf013be277400e44ba
-    ;;
-  mipsel_24kc)
-    asset=better-speedtest-linux-mipsle
-    engine_sha=462ba637cf7512d6dc7f7de3627567f45d5b8312d265764e3b470def5a44f1b1
-    ;;
-  *)
-    printf 'Usage: %s [x86_64|mips_24kc|mipsel_24kc]\n' "$0" >&2
-    exit 2
-    ;;
-esac
+
+list_architectures() {
+  awk '!/^#/ { for (i = 3; i <= NF; i++) print $i }' architectures.tsv
+}
+
+if [[ $arch == --list ]]; then
+  list_architectures
+  exit 0
+fi
+if [[ ! $version =~ ^[0-9]+\.[0-9]+\.[0-9]+-[1-9][0-9]*$ ]]; then
+  printf 'Invalid package version: %s\n' "$version" >&2
+  exit 2
+fi
+if [[ $arch == all ]]; then
+  architectures=$(list_architectures)
+  for target in $architectures; do
+    bash ./build.sh "$target" "$version"
+  done
+  exit 0
+fi
+if ! read -r engine engine_sha < <(awk -v arch="$arch" '
+  !/^#/ { for (i = 3; i <= NF; i++) if ($i == arch) { print $1, $2; exit } }
+' architectures.tsv); then
+  printf 'Unsupported architecture: %s. Run bash build.sh --list for the supported values.\n' "$arch" >&2
+  exit 2
+fi
+asset="better-speedtest-linux-$engine"
 engine_url="https://github.com/Gaimoydev/better-speedtest/releases/download/v0.0.3/$asset"
 package="luci-app-speedtest_${version}_${arch}.ipk"
 epoch=${SOURCE_DATE_EPOCH:-1783089639}
@@ -51,7 +60,7 @@ Package: luci-app-speedtest
 Version: $version
 Architecture: $arch
 Depends: libc, luci-lua-runtime, flock, ca-bundle
-Installed-Size: $(du -sb "$stage/data" | cut -f1)
+Installed-Size: $(find "$stage/data" -type f -printf '%s\n' | awk '{ sum += $1 } END { print sum }')
 Section: luci
 Priority: optional
 License: MIT
